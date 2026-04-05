@@ -1,80 +1,104 @@
 import cv2
 import mediapipe as mp
-
-mp_face_mesh = mp.solutions.face_mesh
-
-LEFT_EYE = [33, 133]
-RIGHT_EYE = [362, 263]
-
-LEFT_IRIS = [474, 475, 476, 477]
-RIGHT_IRIS = [469, 470, 471, 472]
-
-LEFT_EYE_TOP = 159
-LEFT_EYE_BOTTOM = 145
-RIGHT_EYE_TOP = 386
-RIGHT_EYE_BOTTOM = 374
+import numpy as np
 
 
 class EyeTracker:
     def __init__(self):
-        self.gaze_history = []
-        self.face_mesh = mp_face_mesh.FaceMesh(refine_landmarks=True)
+        self.mp_face_mesh = mp.solutions.face_mesh
+        self.face_mesh = self.mp_face_mesh.FaceMesh(
+            refine_landmarks=True,
+            max_num_faces=1,
+            min_detection_confidence=0.5,
+            min_tracking_confidence=0.5
+        )
 
-    def process(self, frame):
+        # Blink tracking
+        self.blink_count = 0
+        self.eye_closed = False
+        self.prev_eye_closed = False
+
+        # Tune this after debugging if needed
+        self.EYE_THRESHOLD = 0.18
+
+        # Eye landmark indices (MediaPipe Face Mesh)
+        self.LEFT_EYE = [33, 160, 158, 133, 153, 144]
+        self.RIGHT_EYE = [362, 385, 387, 263, 373, 380]
+
+    def _distance(self, p1, p2):
+        return np.linalg.norm(np.array(p1) - np.array(p2))
+
+    def _eye_aspect_ratio(self, landmarks, eye_points, w, h):
+        # Convert landmarks to pixel coordinates
+        pts = []
+        for idx in eye_points:
+            lm = landmarks[idx]
+            pts.append((int(lm.x * w), int(lm.y * h)))
+
+        # EAR formula (vertical / horizontal ratio)
+        vertical1 = self._distance(pts[1], pts[5])
+        vertical2 = self._distance(pts[2], pts[4])
+        horizontal = self._distance(pts[0], pts[3])
+
+        ear = (vertical1 + vertical2) / (2.0 * horizontal + 1e-6)
+        return ear
+
+    def process_frame(self, frame):
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        result = self.face_mesh.process(rgb)
+        results = self.face_mesh.process(rgb)
 
-        gaze = "CENTER"
-        confidence = 0
-        blink = False
+        h, w, _ = frame.shape
 
-        if result.multi_face_landmarks:
-            mesh_points = result.multi_face_landmarks[0].landmark
-            h, w, _ = frame.shape
+        blink_detected = False
+        left_ear = right_ear = 0
 
-            coords = [(int(p.x * w), int(p.y * h)) for p in mesh_points]
+        if results.multi_face_landmarks:
+            landmarks = results.multi_face_landmarks[0].landmark
 
-            # Eye positions
-            left_eye_left = coords[LEFT_EYE[0]][0]
-            left_eye_right = coords[LEFT_EYE[1]][0]
-            left_iris_center = sum([coords[i][0] for i in LEFT_IRIS]) // 4
+            left_ear = self._eye_aspect_ratio(landmarks, self.LEFT_EYE, w, h)
+            right_ear = self._eye_aspect_ratio(landmarks, self.RIGHT_EYE, w, h)
 
-            right_eye_left = coords[RIGHT_EYE[0]][0]
-            right_eye_right = coords[RIGHT_EYE[1]][0]
-            right_iris_center = sum([coords[i][0] for i in RIGHT_IRIS]) // 4
+            avg_ear = (left_ear + right_ear) / 2.0
 
-            if (left_eye_right - left_eye_left) != 0 and (right_eye_right - right_eye_left) != 0:
-                left_ratio = (left_iris_center - left_eye_left) / (left_eye_right - left_eye_left)
-                right_ratio = (right_iris_center - right_eye_left) / (right_eye_right - right_eye_left)
+            # Eye state
+            if avg_ear < self.EYE_THRESHOLD:
+                self.eye_closed = True
+            else:
+                self.eye_closed = False
 
-                avg_ratio = (left_ratio + right_ratio) / 2
+            # Blink detection (state transition)
+            if self.prev_eye_closed and not self.eye_closed:
+                self.blink_count += 1
+                blink_detected = True
 
-                # Smooth
-                self.gaze_history.append(avg_ratio)
-                if len(self.gaze_history) > 7:
-                    self.gaze_history.pop(0)
+            self.prev_eye_closed = self.eye_closed
 
-                smooth_ratio = sum(self.gaze_history) / len(self.gaze_history)
+            # Debug text
+            cv2.putText(frame, f"EAR: {avg_ear:.3f}", (30, 50),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
 
-                # Direction
-                if smooth_ratio < 0.42:
-                    gaze = "LEFT"
-                elif smooth_ratio > 0.58:
-                    gaze = "RIGHT"
-                else:
-                    gaze = "CENTER"
+        # Display blink count
+        cv2.putText(frame, f"Blinks: {self.blink_count}", (30, 90),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 0, 0), 2)
 
-                # Confidence
-                confidence = round(abs(smooth_ratio - 0.5) * 2, 2)
+        return frame, self.blink_count, blink_detected
 
-            # Blink
-            left_eye_height = abs(coords[LEFT_EYE_TOP][1] - coords[LEFT_EYE_BOTTOM][1])
-            right_eye_height = abs(coords[RIGHT_EYE_TOP][1] - coords[RIGHT_EYE_BOTTOM][1])
 
-            blink = left_eye_height < 5 and right_eye_height < 5
+if __name__ == "__main__":
+    cap = cv2.VideoCapture(0)
+    tracker = EyeTracker()
 
-            # Draw iris
-            for i in LEFT_IRIS + RIGHT_IRIS:
-                cv2.circle(frame, coords[i], 2, (255, 0, 255), -1)
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
 
-        return frame, gaze, confidence, blink
+        frame, count, blinked = tracker.process_frame(frame)
+
+        cv2.imshow("Eye Tracker", frame)
+
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+    cap.release()
+    cv2.destroyAllWindows()
