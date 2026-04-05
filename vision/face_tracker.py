@@ -27,6 +27,7 @@ class FaceTracker:
 
             for face_landmarks in results.multi_face_landmarks:
 
+
                 if draw:
                     self.mp_draw.draw_landmarks(
                         image=frame,
@@ -52,6 +53,7 @@ class FaceTracker:
                         landmark_drawing_spec=None,
                         connection_drawing_spec=self.mp_styles.get_default_face_mesh_contours_style()
                     )
+
 
                 x_min, y_min = w, h
                 x_max, y_max = 0, 0
