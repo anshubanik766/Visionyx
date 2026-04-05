@@ -83,7 +83,6 @@ class EyeTracker:
 
         return frame, self.blink_count, blink_detected
 
-
 if __name__ == "__main__":
     cap = cv2.VideoCapture(0)
     tracker = EyeTracker()
