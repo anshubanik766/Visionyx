@@ -7,10 +7,6 @@ class EmotionAgeEstimator:
         pass
 
     def estimate_emotion(self, face_region):
-        """
-        Lightweight heuristic emotion detection.
-        NOTE: Not DeepFace level accuracy, but real-time safe.
-        """
 
         gray = cv2.cvtColor(face_region, cv2.COLOR_BGR2GRAY)
         mean_intensity = np.mean(gray)
