@@ -36,17 +36,13 @@ class Visionyx:
 
         overlay = frame.copy()
 
-        # glass background
         cv2.rectangle(overlay, (x1, y1), (x2, y2), (10, 10, 10), -1)
         cv2.addWeighted(overlay, 0.55, frame, 0.45, 0, frame)
 
-        # glow border
         cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 255), 2)
 
-        # inner highlight
         cv2.rectangle(frame, (x1+2, y1+2), (x2-2, y2-2), (255, 255, 255), 1)
 
-        # header
         cv2.rectangle(frame, (x1, y1), (x2, y1 + 30), (0, 255, 255), -1)
 
         cv2.putText(
@@ -60,7 +56,6 @@ class Visionyx:
             cv2.LINE_AA
         )
 
-        # text
         for i, text in enumerate(lines):
             y = y1 + 55 + i * line_h
             cv2.putText(
@@ -89,11 +84,9 @@ class Visionyx:
             (x + w // 2, y + h // 2),
         ]
 
-        # dots
         for px, py in points:
             cv2.circle(frame, (px, py), 3, (0, 255, 0), -1)
 
-        # mesh connections
         connections = [
             (0, 1), (0, 2), (1, 3), (2, 3),
             (4, 5),
@@ -126,20 +119,17 @@ class Visionyx:
                 bbox = face["bbox"]
                 x, y, w, h = bbox
 
-                # face box
                 cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
 
-                # UI overlays
                 self.draw_focus_ring(frame, bbox)
                 self.draw_face_mesh(frame, bbox)
 
-                # emotion + age (safe call)
                 try:
                     emotion, age_group = self.emotion_engine.analyze(frame, bbox)
                 except:
                     emotion, age_group = "unknown", "unknown"
 
-                # eyes (safe fallback)
+
                 try:
                     eyes = self.eye_tracker.detect(frame, bbox)
                     for ex, ey in eyes:
@@ -147,7 +137,6 @@ class Visionyx:
                 except:
                     pass
 
-                # HUD panel
                 self.draw_panel(frame, [
                     f"Emotion: {emotion}",
                     f"Age: {age_group}",
