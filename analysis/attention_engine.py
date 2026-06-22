@@ -11,24 +11,16 @@ class AttentionEngine:
         self.last_update = time.time()
 
     def update(self, blink_count, blink_detected, gaze_score, emotion):
-        """
-        Inputs:
-        - blink_count: total blinks
-        - blink_detected: True/False (recent blink event)
-        - gaze_score: 0 (distracted) → 1 (focused)
-        - emotion: string (neutral, happy, sad, etc.)
-        """
         current_time = time.time()
 
         if blink_detected:
             self.blink_history.append(current_time)
 
-        # keep last 60 seconds
         self.blink_history = [
             t for t in self.blink_history if current_time - t < 60
         ]
 
-        blink_rate = len(self.blink_history)  # blinks per minute
+        blink_rate = len(self.blink_history)  
 
         emotion_score = 1.0
 
@@ -42,11 +34,11 @@ class AttentionEngine:
             emotion_score = 0.8
 
         if blink_rate < 10:
-            blink_score = 0.9  # low fatigue
+            blink_score = 0.9  
         elif blink_rate < 20:
             blink_score = 0.7
         else:
-            blink_score = 0.4  # high fatigue
+            blink_score = 0.4  
 
         gaze_score = np.clip(gaze_score, 0, 1)
 
